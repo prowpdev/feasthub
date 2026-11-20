@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ExternalLink, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { api } from '../api';
 import type { Restaurant, RestaurantService } from '../types/catering';
 
 interface LandingPageManagerProps {
@@ -36,9 +37,7 @@ export function LandingPageManager({
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/landing-page${querySuffix}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await api.admin.landingPage(token, querySuffix);
       if (res.ok) {
         const data = await res.json();
         setRestaurant(data.restaurant);
@@ -59,17 +58,10 @@ export function LandingPageManager({
     setSavingPage(true);
     setSavedBanner(null);
     try {
-      const res = await fetch(`/api/admin/landing-page${querySuffix}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+      const res = await api.admin.saveLandingPage({
           ...restaurant,
           restaurant_id: targetRestaurantId || restaurant.id,
-        }),
-      });
+        }, token, querySuffix);
       if (res.ok) {
         setSavedBanner('Landing page configuration published.');
         onUpdated?.();
@@ -85,21 +77,15 @@ export function LandingPageManager({
     setSavingService(true);
     try {
       const isEdit = Boolean(editingService.id);
-      const url = isEdit
-        ? `/api/admin/services/${editingService.id}${querySuffix}`
-        : `/api/admin/services${querySuffix}`;
-
-      await fetch(url, {
-        method: isEdit ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+      const payload = {
           ...editingService,
           restaurant_id: targetRestaurantId || restaurant.id,
-        }),
-      });
+        };
+      if (editingService.id) {
+        await api.admin.updateService(editingService.id, payload, token, querySuffix);
+      } else {
+        await api.admin.createService(payload, token, querySuffix);
+      }
       setEditingService(null);
       await loadData();
       onUpdated?.();
@@ -109,10 +95,7 @@ export function LandingPageManager({
   }
 
   async function handleDeleteService(id: number) {
-    await fetch(`/api/admin/services/${id}${querySuffix}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    await api.admin.deleteService(id, token, querySuffix);
     await loadData();
     onUpdated?.();
   }

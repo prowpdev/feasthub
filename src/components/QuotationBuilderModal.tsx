@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Download, Plus, Send, Trash2, X } from 'lucide-react';
+import { api } from '../api';
 import { downloadQuotationPdf } from '../lib/pdfGenerator';
 import type {
   CateringInquiry,
@@ -206,13 +207,7 @@ export function QuotationBuilderModal({
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/inquiries/${inquiry.id}/quotations`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+      const res = await api.admin.createQuotation(inquiry.id, {
           items: items.map((it) => ({
             item_type: it.item_type,
             title: it.title,
@@ -228,8 +223,7 @@ export function QuotationBuilderModal({
           terms_conditions: termsConditions,
           valid_until: validUntil,
           send_immediately: sendImmediately,
-        }),
-      });
+        }, token);
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || 'Could not save quotation.');

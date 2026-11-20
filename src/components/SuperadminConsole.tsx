@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { LandingPageManager } from './LandingPageManager';
+import { api } from '../api';
 import type {
   AuthUser,
   Booking,
@@ -103,12 +104,11 @@ export function SuperadminConsole({
     if (paymentStatusFilter !== 'All') bkQs.set('payment_status', paymentStatusFilter);
     if (bookingSearch.trim()) bkQs.set('search', bookingSearch.trim());
 
-    const headers = { Authorization: `Bearer ${token}` };
     const [ovRes, restRes, usrRes, bkRes] = await Promise.all([
-      fetch('/api/superadmin/overview', { headers }),
-      fetch('/api/superadmin/restaurants', { headers }),
-      fetch(`/api/superadmin/users?${userQs.toString()}`, { headers }),
-      fetch(`/api/superadmin/bookings?${bkQs.toString()}`, { headers }),
+      api.superadmin.overview(token),
+      api.superadmin.restaurants(token),
+      api.superadmin.users(token, userQs),
+      api.superadmin.bookings(token, bkQs),
     ]);
 
     if (ovRes.ok) {
@@ -143,14 +143,7 @@ export function SuperadminConsole({
   }, [loadSuperadminData]);
 
   async function togglePublishRestaurant(rest: SuperadminRestaurantSummary) {
-    await fetch(`/api/superadmin/restaurants/${rest.id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ is_published: !rest.is_published }),
-    });
+    await api.superadmin.updateRestaurant(rest.id, { is_published: !rest.is_published }, token);
     await loadSuperadminData();
   }
 
@@ -158,11 +151,6 @@ export function SuperadminConsole({
     e.preventDefault();
     if (!userModal) return;
     setUserError(null);
-
-    const url =
-      userModal.mode === 'create'
-        ? '/api/superadmin/users'
-        : `/api/superadmin/users/${userModal.id}`;
 
     const body =
       userModal.mode === 'create'
@@ -181,14 +169,7 @@ export function SuperadminConsole({
             ...(userModal.password.trim() ? { new_password: userModal.password.trim() } : {}),
           };
 
-    const res = await fetch(url, {
-      method: userModal.mode === 'create' ? 'POST' : 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(body),
-    });
+    const res = await api.superadmin.saveUser(userModal.mode === 'create' ? null : userModal.id, body, token);
     const data = await res.json();
     if (!res.ok) {
       setUserError(data.error || 'Could not save user.');
@@ -199,34 +180,17 @@ export function SuperadminConsole({
   }
 
   async function handleToggleUserActive(u: ManagedUser) {
-    await fetch(`/api/superadmin/users/${u.id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ is_active: !u.is_active }),
-    });
+    await api.superadmin.updateUser(u.id, { is_active: !u.is_active }, token);
     await loadSuperadminData();
   }
 
   async function handleDeleteUser(id: number) {
-    await fetch(`/api/superadmin/users/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    await api.superadmin.deleteUser(id, token);
     await loadSuperadminData();
   }
 
   async function handleUpdateBookingStatus(bookingId: number, bookingStatus: string) {
-    await fetch(`/api/superadmin/bookings/${bookingId}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ booking_status: bookingStatus }),
-    });
+    await api.superadmin.updateBooking(bookingId, { booking_status: bookingStatus }, token);
     await loadSuperadminData();
   }
 

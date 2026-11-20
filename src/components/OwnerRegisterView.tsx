@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Check, Plus, Store, Trash2 } from 'lucide-react';
 import { ownerRegisterSchema, type OwnerRegisterValues } from '../lib/validation';
+import { api } from '../api';
 import { ResilientImage } from './ResilientImage';
 import type { AuthUser } from '../types/catering';
 
@@ -91,13 +92,9 @@ export function OwnerRegisterView({ onBack, onRegistered }: OwnerRegisterViewPro
     setSubmitting(true);
     setServerError(null);
     try {
-      const res = await fetch('/api/public/register-owner', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const res = await api.public.registerOwner({
           ...values,
           starter_services: starterServices.filter((s) => s.title.trim().length >= 2),
-        }),
       });
       const data = await res.json();
       if (!res.ok) {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pencil, Plus, Trash2, X } from 'lucide-react';
+import { api } from '../api';
 import type { CateringPackage, FoodCategory, FoodItem } from '../types/catering';
 
 interface CatalogManagerProps {
@@ -39,16 +40,11 @@ export function CatalogManager({
     if (!editingPkg) return;
     setSaving(true);
     try {
-      const isEdit = Boolean(editingPkg.id);
-      const url = isEdit ? `/api/admin/packages/${editingPkg.id}` : '/api/admin/packages';
-      await fetch(url, {
-        method: isEdit ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(editingPkg),
-      });
+      if (editingPkg.id) {
+        await api.admin.updatePackage(editingPkg.id, editingPkg, token);
+      } else {
+        await api.admin.createPackage(editingPkg, token);
+      }
       setEditingPkg(null);
       onRefresh();
     } finally {
@@ -57,10 +53,7 @@ export function CatalogManager({
   }
 
   async function handleDeletePackage(id: number) {
-    await fetch(`/api/admin/packages/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    await api.admin.deletePackage(id, token);
     onRefresh();
   }
 
@@ -69,16 +62,11 @@ export function CatalogManager({
     if (!editingFood) return;
     setSaving(true);
     try {
-      const isEdit = Boolean(editingFood.id);
-      const url = isEdit ? `/api/admin/food-items/${editingFood.id}` : '/api/admin/food-items';
-      await fetch(url, {
-        method: isEdit ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(editingFood),
-      });
+      if (editingFood.id) {
+        await api.admin.updateFoodItem(editingFood.id, editingFood, token);
+      } else {
+        await api.admin.createFoodItem(editingFood, token);
+      }
       setEditingFood(null);
       onRefresh();
     } finally {
@@ -87,24 +75,14 @@ export function CatalogManager({
   }
 
   async function handleDeleteFood(id: number) {
-    await fetch(`/api/admin/food-items/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    await api.admin.deleteFoodItem(id, token);
     onRefresh();
   }
 
   async function handleAddCategory(e: React.FormEvent) {
     e.preventDefault();
     if (!newCategoryName.trim()) return;
-    await fetch('/api/admin/categories', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ name: newCategoryName.trim() }),
-    });
+    await api.admin.createCategory({ name: newCategoryName.trim() }, token);
     setNewCategoryName('');
     onRefresh();
   }

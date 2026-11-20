@@ -19,6 +19,7 @@ import type {
   Restaurant,
   RestaurantService,
 } from '../types/catering';
+import { api } from '../api';
 
 interface QuotationRequestWizardProps {
   restaurant: Restaurant;
@@ -203,10 +204,7 @@ export function QuotationRequestWizard({
     setSubmitting(true);
     setServerError(null);
     try {
-      const response = await fetch(`/api/public/${restaurant.slug}/inquiries`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const response = await api.public.submitInquiry(restaurant.slug, {
           ...values,
           selected_package_id: selectedPackage?.id || null,
           selected_items: cartItems.map((c) => ({
@@ -215,7 +213,6 @@ export function QuotationRequestWizard({
             notes: c.notes,
             selected_addons: c.selectedAddons,
           })),
-        }),
       });
 
       const data = await response.json();

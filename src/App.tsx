@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { CustomerStorefront } from './components/CustomerStorefront';
 import { AdminDashboard } from './components/AdminDashboard';
 import { OwnerRegisterView } from './components/OwnerRegisterView';
+import { api } from './api';
 import type {
   CateringPackage,
   EventType,
@@ -34,16 +35,28 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const [listRes, sfRes] = await Promise.all([
-        fetch('/api/public/restaurants'),
-        fetch(`/api/public/${slug}/storefront`),
-      ]);
-      if (!listRes.ok || !sfRes.ok) {
+      const listRes = await api.public.restaurants();
+      if (!listRes.ok) {
         throw new Error('Unable to load catering storefront.');
       }
       const listData = await listRes.json();
+      const restaurantList: Restaurant[] = listData.restaurants || [];
+      setRestaurants(restaurantList);
+      const selectedRestaurant = restaurantList.find((restaurant) => restaurant.slug === slug) || restaurantList[0];
+      if (!selectedRestaurant) {
+        setStorefront(null);
+        setError('No published catering storefronts are available yet.');
+        return;
+      }
+
+      const sfRes = await api.public.storefront(selectedRestaurant.slug);
+      if (!sfRes.ok) {
+        throw new Error('Unable to load catering storefront.');
+      }
       const sfData = await sfRes.json();
-      setRestaurants(listData.restaurants);
+      if (selectedRestaurant.slug !== slug) {
+        setActiveSlug(selectedRestaurant.slug);
+      }
       setStorefront({
         ...sfData,
         services: sfData.services || [],
@@ -119,6 +132,13 @@ export default function App() {
           className="px-4 py-2 bg-[#1B4332] text-white text-xs font-medium rounded-lg"
         >
           Retry
+        </button>
+        <button
+          type="button"
+          onClick={openRegisterOwner}
+          className="px-4 py-2 border border-stone-300 text-stone-700 text-xs font-medium rounded-lg"
+        >
+          Register a restaurant
         </button>
       </div>
     );

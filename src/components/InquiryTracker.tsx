@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { api } from '../api';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -76,8 +77,10 @@ export function InquiryTracker({
     setError(null);
     setActionMsg(null);
     try {
-      const qs = new URLSearchParams({ reference: reference.trim(), contact: contact.trim() });
-      const res = await fetch(`/api/public/${restaurantSlug}/track?${qs.toString()}`);
+      const res = await api.public.trackInquiry(restaurantSlug, {
+        reference: reference.trim(),
+        contact: contact.trim(),
+      });
       const data = await res.json();
       if (!res.ok) {
         setResult(null);
@@ -98,18 +101,15 @@ export function InquiryTracker({
     setError(null);
     setActionMsg(null);
     try {
-      const res = await fetch(
-        `/api/public/${restaurantSlug}/quotations/${result.quotation.quotation_number}/respond`,
+      const res = await api.public.respondToQuotation(
+        restaurantSlug,
+        result.quotation.quotation_number,
         {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            reference: result.inquiry.reference_number,
-            contact: form.getValues('contact'),
-            decision,
-            customer_note: revisionNote,
-          }),
-        }
+          reference: result.inquiry.reference_number,
+          contact: form.getValues('contact'),
+          decision,
+          customer_note: revisionNote,
+        },
       );
       const data = await res.json();
       if (!res.ok) {

@@ -14,14 +14,17 @@ import {
   Search,
   Settings,
   UtensilsCrossed,
+  Users,
   X,
 } from 'lucide-react';
 import { adminLoginSchema, type AdminLoginValues } from '../lib/validation';
+import { api } from '../api';
 import { downloadQuotationPdf } from '../lib/pdfGenerator';
 import { QuotationBuilderModal } from './QuotationBuilderModal';
 import { CatalogManager } from './CatalogManager';
 import { LandingPageManager } from './LandingPageManager';
 import { SuperadminConsole } from './SuperadminConsole';
+import { UserManagement } from './UserManagement';
 import type {
   AuditLog,
   AuthUser,
@@ -50,6 +53,7 @@ type AdminSection =
   | 'catalog'
   | 'landing'
   | 'notifications'
+  | 'users'
   | 'settings';
 
 const INQUIRY_STATUSES: InquiryStatus[] = [
@@ -152,14 +156,6 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
     defaultValues: { email: '', password: '' },
   });
 
-  const authHeaders = useCallback(
-    () => ({
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    }),
-    [token]
-  );
-
   const loadAllAdminData = useCallback(async () => {
     if (!token) return;
     setLoadingData(true);
@@ -169,11 +165,11 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
       if (inquirySearch.trim()) qs.set('search', inquirySearch.trim());
 
       const [ovRes, inqRes, bkRes, catRes, notRes] = await Promise.all([
-        fetch('/api/admin/overview', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`/api/admin/inquiries?${qs.toString()}`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/admin/bookings', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/admin/catalog', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/admin/notifications', { headers: { Authorization: `Bearer ${token}` } }),
+        api.admin.overview(token),
+        api.admin.inquiries(token, qs),
+        api.admin.bookings(token),
+        api.admin.catalog(token),
+        api.admin.notifications(token),
       ]);
 
       if (ovRes.ok) {
@@ -213,7 +209,7 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
       setAuthChecking(false);
       return;
     }
-    fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+    api.auth.me(token)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => {
         setUser(data.user);
@@ -234,11 +230,7 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
 
   async function handleLogin(values: AdminLoginValues) {
     setLoginError(null);
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(values),
-    });
+    const res = await api.auth.login(values);
     const data = await res.json();
     if (!res.ok) {
       setLoginError(data.error || 'Login failed');
@@ -250,7 +242,7 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
   }
 
   async function handleLogout() {
-    await fetch('/api/auth/logout', { method: 'POST', headers: authHeaders() });
+    await api.auth.logout(token);
     localStorage.removeItem('catering_admin_token');
     setToken('');
     setUser(null);
@@ -258,9 +250,7 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
   }
 
   async function openInquiryDetail(id: number) {
-    const res = await fetch(`/api/admin/inquiries/${id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await api.admin.inquiry(id, token);
     if (res.ok) {
       const data = await res.json();
       setSelectedInquiryDetail(data);
@@ -273,11 +263,7 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
   }
 
   async function updateInquiryPatch(id: number, patch: Record<string, unknown>) {
-    await fetch(`/api/admin/inquiries/${id}`, {
-      method: 'PATCH',
-      headers: authHeaders(),
-      body: JSON.stringify(patch),
-    });
+    await api.admin.updateInquiry(id, patch, token);
     await openInquiryDetail(id);
     await loadAllAdminData();
   }
@@ -285,20 +271,13 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
   async function handleAddNote(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedInquiryDetail || !newNoteText.trim()) return;
-    await fetch(`/api/admin/inquiries/${selectedInquiryDetail.inquiry.id}/notes`, {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({ note: newNoteText.trim() }),
-    });
+    await api.admin.addInquiryNote(selectedInquiryDetail.inquiry.id, { note: newNoteText.trim() }, token);
     setNewNoteText('');
     await openInquiryDetail(selectedInquiryDetail.inquiry.id);
   }
 
   async function handleSendDraftQuotation(quotationId: number) {
-    await fetch(`/api/admin/quotations/${quotationId}/send`, {
-      method: 'POST',
-      headers: authHeaders(),
-    });
+    await api.admin.sendQuotation(quotationId, token);
     if (selectedInquiryDetail) {
       await openInquiryDetail(selectedInquiryDetail.inquiry.id);
     }
@@ -306,11 +285,11 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
   }
 
   async function handleConvertToBooking(inquiryId: number, quotationId: number) {
-    const res = await fetch(`/api/admin/inquiries/${inquiryId}/convert-booking`, {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({ quotation_id: quotationId, staff_verified_acceptance: true }),
-    });
+    const res = await api.admin.convertInquiryToBooking(
+      inquiryId,
+      { quotation_id: quotationId, staff_verified_acceptance: true },
+      token,
+    );
     if (res.ok) {
       await openInquiryDetail(inquiryId);
       await loadAllAdminData();
@@ -318,9 +297,7 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
   }
 
   async function handleExportCsv() {
-    const res = await fetch('/api/admin/inquiries/export/csv', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await api.admin.exportInquiries(token);
     if (!res.ok) return;
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -334,11 +311,7 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
   async function handleRecordPayment(e: React.FormEvent) {
     e.preventDefault();
     if (!paymentModalBooking) return;
-    const res = await fetch(`/api/admin/bookings/${paymentModalBooking.id}/payments`, {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify(paymentForm),
-    });
+    const res = await api.admin.recordPayment(paymentModalBooking.id, paymentForm, token);
     if (res.ok) {
       setPaymentModalBooking(null);
       await loadAllAdminData();
@@ -346,20 +319,12 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
   }
 
   async function handleBookingStatusChange(bookingId: number, bookingStatus: string) {
-    await fetch(`/api/admin/bookings/${bookingId}`, {
-      method: 'PATCH',
-      headers: authHeaders(),
-      body: JSON.stringify({ booking_status: bookingStatus }),
-    });
+    await api.admin.updateBooking(bookingId, { booking_status: bookingStatus }, token);
     await loadAllAdminData();
   }
 
   async function handleSendReminder(bookingId: number, channel: 'email' | 'sms') {
-    await fetch('/api/admin/notifications/reminder', {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({ booking_id: bookingId, channel }),
-    });
+    await api.admin.sendReminder({ booking_id: bookingId, channel }, token);
     await loadAllAdminData();
   }
 
@@ -367,11 +332,7 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
     e.preventDefault();
     if (!restaurant) return;
     setSettingsSavedMsg(null);
-    const res = await fetch('/api/admin/restaurant', {
-      method: 'PATCH',
-      headers: authHeaders(),
-      body: JSON.stringify(restaurant),
-    });
+    const res = await api.admin.updateRestaurant(restaurant, token);
     if (res.ok) {
       setSettingsSavedMsg('Restaurant settings updated.');
       await loadAllAdminData();
@@ -442,47 +403,10 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
             </button>
           </form>
 
-          <div className="mt-6 pt-5 border-t border-stone-200 space-y-4">
-            <div>
-              <div className="text-xs font-medium text-stone-600 mb-2.5">
-                Quick Demo Accounts
-              </div>
-              <div className="grid grid-cols-1 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    loginForm.setValue('email', 'claire@maisonsaffron.com');
-                    loginForm.setValue('password', 'ChefAdmin2026!');
-                  }}
-                  className="text-left px-3 py-2 border border-stone-200 rounded-lg text-xs hover:bg-stone-50 flex items-center justify-between"
-                >
-                  <span className="font-medium text-stone-900">Maison Saffron (Owner)</span>
-                  <span className="font-mono text-stone-500">claire@maisonsaffron.com</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    loginForm.setValue('email', 'elena@atelierverde.com');
-                    loginForm.setValue('password', 'ChefAdmin2026!');
-                  }}
-                  className="text-left px-3 py-2 border border-stone-200 rounded-lg text-xs hover:bg-stone-50 flex items-center justify-between"
-                >
-                  <span className="font-medium text-stone-900">Atelier Verde (Owner)</span>
-                  <span className="font-mono text-stone-500">elena@atelierverde.com</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    loginForm.setValue('email', 'superadmin@hearthandtable.com');
-                    loginForm.setValue('password', 'SuperAdmin2026!');
-                  }}
-                  className="text-left px-3 py-2 border border-stone-300 bg-stone-50 rounded-lg text-xs hover:bg-stone-100 flex items-center justify-between"
-                >
-                  <span className="font-medium text-[#1B4332]">Platform Superadmin</span>
-                  <span className="font-mono text-stone-600">superadmin@hearthandtable.com</span>
-                </button>
-              </div>
-            </div>
+          <div className="mt-6 pt-5 border-t border-stone-200">
+            <p className="text-xs text-stone-600">
+              Sign in with an account created in Laravel. New restaurant partners can register below.
+            </p>
 
             <div className="pt-3 border-t border-stone-100 text-center">
               <button
@@ -517,6 +441,7 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
     { id: 'catalog', label: 'Menu & Packages', icon: UtensilsCrossed },
     { id: 'landing', label: 'Landing Page & Services', icon: Globe },
     { id: 'notifications', label: 'Notifications & Audit', icon: Bell },
+    ...(user.role === 'owner' ? [{ id: 'users' as const, label: 'Team Management', icon: Users }] : []),
     { id: 'settings', label: 'Settings & API Docs', icon: Settings },
   ];
 
@@ -615,14 +540,16 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
               Storefront
             </button>
 
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-stone-300 rounded-lg text-xs font-medium text-stone-700 hover:bg-stone-50 whitespace-nowrap"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Export CSV
-            </button>
+            {section !== 'users' && (
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-stone-300 rounded-lg text-xs font-medium text-stone-700 hover:bg-stone-50 whitespace-nowrap"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Export CSV
+              </button>
+            )}
           </div>
         </header>
 
@@ -981,6 +908,10 @@ export function AdminDashboard({ onBackToStorefront, onOpenRegisterOwner }: Admi
               onPreviewLivePage={(slug) => onBackToStorefront(slug)}
               onUpdated={loadAllAdminData}
             />
+          )}
+
+          {section === 'users' && user.role === 'owner' && (
+            <UserManagement token={token} />
           )}
 
           {/* SECTION 5: NOTIFICATIONS & AUDIT */}
