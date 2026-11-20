@@ -1,0 +1,6 @@
+{
+  "name": "Hearth & Table Catering",
+  "description": "Multi-tenant restaurant catering, custom bulk ordering, quotation builder, and event booking management platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
